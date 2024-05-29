@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*.*.*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.22"
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Build for Windows
+        run: |
+          mkdir dist
+          cd src
+          fyne package -os windows -name wizzz
+          cd ..
+          mv src/wizzz.exe dist/wizzz-windows.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: wizzz-windows
+          path: dist/*.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.22"
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            libfreetype6-dev \
+            libxinerama-dev \
+            libglfw3 \
+            libglfw3-dev \
+            pkg-config
+
+      - name: Build for Linux
+        run: |
+          mkdir dist
+          fyne package -os linux -name wizzz -src src
+          mv wizzz.tar.xz dist/wizzz-linux.tar.xz
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: wizzz-linux
+          path: dist/*.tar.xz
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: "1.22"
+
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Build for macOS
+        run: |
+          mkdir dist
+          fyne package -os darwin -name wizzz -src src -appVersion ${{ github.ref_name }}
+          npx create-dmg wizzz.app | echo "done"
+          rm -rf *.app
+          mv *.dmg dist/wizzz-macos-${{ github.ref_name }}.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: wizzz-macos
+          path: dist/*.dmg
+
+  release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        with:
+          path: dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
