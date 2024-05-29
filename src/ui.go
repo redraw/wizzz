@@ -20,11 +20,13 @@ func createMainWindow(myApp fyne.App, fleet *WizFleet) fyne.Window {
 	})
 
 	brightnessSlider := widget.NewSlider(0, 100)
+	brightnessSlider.SetValue(50)
 	brightnessSlider.OnChanged = func(value float64) {
 		go fleet.SetBrightness(int(value))
 	}
 
 	temperatureSlider := widget.NewSlider(2200, 6500)
+	temperatureSlider.SetValue(4000)
 	temperatureSlider.OnChanged = func(value float64) {
 		go fleet.SetTemperature(int(value))
 	}
@@ -37,13 +39,14 @@ func createMainWindow(myApp fyne.App, fleet *WizFleet) fyne.Window {
 	rssiLabel := widget.NewLabel("RSSI: -")
 
 	deviceSelector := widget.NewSelect(nil, func(value string) {
-		fleet.Select(value)
-		if fleet.SelectedDevice != nil {
-			if state := fleet.SelectedDevice.State; state != nil {
-				switchButton.SetChecked(state["state"].(bool))
-				brightnessSlider.SetValue(float64(state["dimming"].(float64)))
-				temperatureSlider.SetValue(float64(state["temp"].(float64)))
-			}
+		device := fleet.Select(value)
+		if device == nil {
+			return
+		}
+		if state, err := device.GetState(); err == nil {
+			switchButton.SetChecked(state["state"].(bool))
+			brightnessSlider.SetValue(float64(state["dimming"].(float64)))
+			temperatureSlider.SetValue(float64(state["temp"].(float64)))
 		}
 	})
 
@@ -53,7 +56,7 @@ func createMainWindow(myApp fyne.App, fleet *WizFleet) fyne.Window {
 		options = append(options, device.IP)
 	}
 	deviceSelector.SetOptions(options)
-	deviceSelector.SetSelected(options[1])
+	deviceSelector.SetSelected(options[0])
 
 	content := container.NewVBox(
 		deviceSelector,

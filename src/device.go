@@ -75,6 +75,13 @@ func (wd *WizDevice) sendCommand(method string, params map[string]interface{}) e
 	return nil
 }
 
+func (wd *WizDevice) GetState() (map[string]interface{}, error) {
+	if err := wd.sendCommand("getPilot", nil); err != nil {
+		return nil, err
+	}
+	return wd.State, nil
+}
+
 func (wd *WizDevice) SetPower(on bool) error {
 	state := map[string]interface{}{"state": on}
 	return wd.sendCommand("setPilot", state)

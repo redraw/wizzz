@@ -17,8 +17,10 @@ func NewWizFleet() *WizFleet {
 	}
 }
 
-func (wf *WizFleet) Select(ip string) {
-	wf.SelectedDevice = getSelectedDevice(ip, wf.Devices)
+func (wf *WizFleet) Select(ip string) *WizDevice {
+	device := getSelectedDevice(ip, wf.Devices)
+	wf.SelectedDevice = device
+	return device
 }
 
 func (wf *WizFleet) Start() {
