@@ -26,7 +26,7 @@ jobs:
           cd src
           fyne package -os windows -name wizzz
           cd ..
-          mv src/wizzz.exe dist/wizzz-windows.exe
+          mv src/wizzz.exe dist/wizzz-windows-${{ github.ref_name }}.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
@@ -67,7 +67,7 @@ jobs:
         run: |
           mkdir dist
           fyne package -os linux -name wizzz -src src
-          mv wizzz.tar.xz dist/wizzz-linux.tar.xz
+          mv wizzz.tar.xz dist/wizzz-linux-${{ github.ref_name }}.tar.xz
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
@@ -121,3 +121,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/**
+          generate_release_notes: true
