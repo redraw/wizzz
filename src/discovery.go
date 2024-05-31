@@ -28,7 +28,7 @@ func discoverWiZDevices(timeout time.Duration) []*WizDevice {
 
 	conn, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
-		log.Error("Error setting up discovery: %v", err)
+		log.Fatalf("Error setting up discovery: %v", err)
 	}
 	defer conn.Close()
 
