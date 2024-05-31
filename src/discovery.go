@@ -2,9 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -12,7 +13,7 @@ const (
 	discoveryMsg  = `{"method":"registration","params":{"phoneMac":"AAAAAAAAAAAA","phoneIp":"1.2.3.4","register":false,"id":1}}`
 )
 
-func discoverWiZDevices() []*WizDevice {
+func discoverWiZDevices(timeout time.Duration) []*WizDevice {
 	var devices []*WizDevice
 
 	localAddr := &net.UDPAddr{
@@ -27,19 +28,20 @@ func discoverWiZDevices() []*WizDevice {
 
 	conn, err := net.ListenUDP("udp", localAddr)
 	if err != nil {
-		log.Fatalf("Error setting up discovery: %v", err)
+		log.Error("Error setting up discovery: %v", err)
 	}
 	defer conn.Close()
 
-	timeout := time.After(1 * time.Second)
+	log.Info("Starting discovery, timeout: ", timeout)
+	timeoutReached := time.After(timeout)
 
 	for {
 		select {
-		case <-timeout:
-			log.Println("Discovery timeout reached")
+		case <-timeoutReached:
+			log.Info("Discovery timeout reached")
 			return devices
 		default:
-			log.Println("Sending discovery packet...")
+			log.Debug("Sending discovery packet...")
 			_, err := conn.WriteToUDP([]byte(discoveryMsg), &serverAddr)
 			if err != nil {
 				log.Printf("Error sending discovery packet: %v", err)

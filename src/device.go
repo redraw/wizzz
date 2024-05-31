@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"image/color"
-	"log"
 	"net"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type WizDevice struct {
@@ -36,7 +37,7 @@ func NewWizDevice(ip, mac string) (*WizDevice, error) {
 }
 
 func (wd *WizDevice) sendCommand(method string, params map[string]interface{}) error {
-	log.Println(">", method, params)
+	log.Debugf("> %v params=%v", method, params)
 
 	payload := map[string]interface{}{
 		"method": method,
@@ -66,7 +67,7 @@ func (wd *WizDevice) sendCommand(method string, params map[string]interface{}) e
 		return err
 	}
 
-	log.Println("<", respData)
+	log.Debugf("< %v", respData)
 
 	if method == "getPilot" {
 		wd.State = respData.Result

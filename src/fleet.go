@@ -2,8 +2,9 @@ package main
 
 import (
 	"image/color"
-	"log"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type WizFleet struct {
@@ -17,6 +18,10 @@ func NewWizFleet() *WizFleet {
 	}
 }
 
+func (wf *WizFleet) AddDevice(device *WizDevice) {
+	wf.Devices = append(wf.Devices, device)
+}
+
 func (wf *WizFleet) Select(ip string) *WizDevice {
 	device := getSelectedDevice(ip, wf.Devices)
 	wf.SelectedDevice = device
@@ -24,6 +29,7 @@ func (wf *WizFleet) Select(ip string) *WizDevice {
 }
 
 func (wf *WizFleet) Start() {
+	log.Debug("Start monitoring...")
 	for _, device := range wf.Devices {
 		go wf.monitorDevice(device)
 	}
@@ -44,10 +50,7 @@ func (wf *WizFleet) SetPower(on bool) error {
 		return wf.SelectedDevice.SetPower(on)
 	}
 	for _, device := range wf.Devices {
-		err := device.SetPower(on)
-		if err != nil {
-			return err
-		}
+		go device.SetPower(on)
 	}
 	return nil
 }
@@ -57,10 +60,7 @@ func (wf *WizFleet) SetBrightness(value int) error {
 		return wf.SelectedDevice.SetBrightness(value)
 	}
 	for _, device := range wf.Devices {
-		err := device.SetBrightness(value)
-		if err != nil {
-			return err
-		}
+		go device.SetBrightness(value)
 	}
 	return nil
 }
@@ -70,10 +70,7 @@ func (wf *WizFleet) SetTemperature(value int) error {
 		return wf.SelectedDevice.SetTemperature(value)
 	}
 	for _, device := range wf.Devices {
-		err := device.SetTemperature(value)
-		if err != nil {
-			return err
-		}
+		go device.SetTemperature(value)
 	}
 	return nil
 }
@@ -83,10 +80,7 @@ func (wf *WizFleet) SetColor(rgb color.Color) error {
 		return wf.SelectedDevice.SetColor(rgb)
 	}
 	for _, device := range wf.Devices {
-		err := device.SetColor(rgb)
-		if err != nil {
-			return err
-		}
+		go device.SetColor(rgb)
 	}
 	return nil
 }
@@ -95,12 +89,10 @@ func getSelectedDevice(selected string, devices []*WizDevice) *WizDevice {
 	if selected == "" || selected == "All" {
 		return nil
 	}
-
 	for _, device := range devices {
 		if device.IP == selected {
 			return device
 		}
 	}
-
 	return nil
 }
