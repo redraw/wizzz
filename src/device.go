@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"image/color"
 	"net"
+	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -11,8 +14,31 @@ import (
 type WizDevice struct {
 	IP    string
 	MAC   string
-	State map[string]interface{}
+	State WizState
 	conn  *net.UDPConn
+	mu    sync.Mutex
+}
+
+type WizState struct {
+	Mac     string  `json:"mac"`
+	Dimming float64 `json:"dimming"`
+	State   bool    `json:"state"`
+	Rssi    float64 `json:"rssi"`
+	Temp    float64 `json:"temp"`
+	R       int     `json:"r"`
+	G       int     `json:"g"`
+	B       int     `json:"b"`
+}
+
+type WizParams map[string]interface{}
+
+type WizPayload struct {
+	Method string    `json:"method"`
+	Params WizParams `json:"params"`
+}
+
+func (wd *WizDevice) Close() {
+	wd.conn.Close()
 }
 
 func NewWizDevice(ip, mac string) (*WizDevice, error) {
@@ -27,79 +53,144 @@ func NewWizDevice(ip, mac string) (*WizDevice, error) {
 	}
 
 	device := &WizDevice{
-		IP:    ip,
-		MAC:   mac,
-		conn:  conn,
-		State: make(map[string]interface{}),
+		IP:   ip,
+		MAC:  mac,
+		conn: conn,
 	}
 
 	return device, nil
 }
 
-func (wd *WizDevice) sendCommand(method string, params map[string]interface{}) error {
-	log.Debugf("> %v params=%v", method, params)
+func (wd *WizDevice) sendCommand(payload WizPayload) (interface{}, error) {
+	wd.mu.Lock()
+	defer wd.mu.Unlock()
 
-	payload := map[string]interface{}{
-		"method": method,
-		"params": params,
-	}
+	log.Debugf("> %+v", payload)
+
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = wd.conn.Write(body)
 	if err != nil {
-		return err
-	}
-
-	response := make([]byte, 4096)
-	n, err := wd.conn.Read(response)
-	if err != nil {
-		return err
-	}
-
-	var respData struct {
-		Result map[string]interface{} `json:"result"`
-	}
-	err = json.Unmarshal(response[:n], &respData)
-	if err != nil {
-		return err
-	}
-
-	log.Debugf("< %v", respData)
-
-	if method == "getPilot" {
-		wd.State = respData.Result
-	}
-
-	return nil
-}
-
-func (wd *WizDevice) GetState() (map[string]interface{}, error) {
-	if err := wd.sendCommand("getPilot", nil); err != nil {
 		return nil, err
 	}
-	return wd.State, nil
+
+	bytes := make([]byte, 4096)
+	if err := wd.conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		return nil, err
+	}
+
+	n, err := wd.conn.Read(bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(bytes[:n], &response); err != nil {
+		return nil, err
+	}
+
+	switch response.Method {
+	case "getPilot":
+		var data struct {
+			Result WizState `json:"result"`
+		}
+		if err := json.Unmarshal(bytes[:n], &data); err != nil {
+			return nil, err
+		}
+		log.Debugf("< %+v", data.Result)
+		wd.State = data.Result
+		return data.Result, nil
+
+	case "setPilot":
+		var data struct {
+			Result struct {
+				Success bool `json:"success"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(bytes[:n], &data); err != nil {
+			return nil, err
+		}
+		log.Debugf("< %+v", data.Result)
+		return data.Result.Success, nil
+	}
+
+	return nil, errors.New("unknown response")
 }
 
-func (wd *WizDevice) SetPower(on bool) error {
-	state := map[string]interface{}{"state": on}
-	return wd.sendCommand("setPilot", state)
+func (wd *WizDevice) GetState() (WizState, error) {
+	request := WizPayload{Method: "getPilot"}
+
+	res, err := wd.sendCommand(request)
+	if err != nil {
+		return WizState{}, err
+	}
+
+	return res.(WizState), nil
 }
 
-func (wd *WizDevice) SetBrightness(value int) error {
-	state := map[string]interface{}{"dimming": value}
-	return wd.sendCommand("setPilot", state)
+func (wd *WizDevice) SetPower(on bool) (bool, error) {
+	request := WizPayload{
+		Method: "setPilot",
+		Params: WizParams{"state": on},
+	}
+
+	res, err := wd.sendCommand(request)
+	if err != nil {
+		return false, err
+	}
+
+	return res.(bool), nil
 }
 
-func (wd *WizDevice) SetTemperature(value int) error {
-	state := map[string]interface{}{"temp": value}
-	return wd.sendCommand("setPilot", state)
+func (wd *WizDevice) SetBrightness(value float64) (bool, error) {
+	request := WizPayload{
+		Method: "setPilot",
+		Params: WizParams{"dimming": value},
+	}
+
+	res, err := wd.sendCommand(request)
+	if err != nil {
+		return false, err
+	}
+
+	return res.(bool), nil
 }
 
-func (wd *WizDevice) SetColor(rgb color.Color) error {
+func (wd *WizDevice) SetTemperature(value float64) (bool, error) {
+	request := WizPayload{
+		Method: "setPilot",
+		Params: WizParams{"temp": value},
+	}
+
+	res, err := wd.sendCommand(request)
+	if err != nil {
+		return false, err
+	}
+
+	return res.(bool), nil
+}
+
+func (wd *WizDevice) SetColor(rgb color.Color) (bool, error) {
 	r, g, b, _ := rgb.RGBA()
-	state := map[string]interface{}{"r": int(r >> 8), "g": int(g >> 8), "b": int(b >> 8)}
-	return wd.sendCommand("setPilot", state)
+
+	request := WizPayload{
+		Method: "setPilot",
+		Params: WizParams{
+			"r": int(r >> 8),
+			"g": int(g >> 8),
+			"b": int(b >> 8),
+		},
+	}
+
+	res, err := wd.sendCommand(request)
+	if err != nil {
+		return false, err
+	}
+
+	return res.(bool), nil
 }

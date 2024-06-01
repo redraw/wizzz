@@ -37,50 +37,61 @@ func (wf *WizFleet) Start() {
 
 func (wf *WizFleet) monitorDevice(device *WizDevice) {
 	for {
-		err := device.sendCommand("getPilot", nil)
-		if err != nil {
-			log.Printf("Error getting state for device %s: %v", device.IP, err)
+		if state, err := device.GetState(); err == nil {
+			log.Debugf("Device %s state: %+v", device.IP, state)
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
 
 func (wf *WizFleet) SetPower(on bool) error {
 	if wf.SelectedDevice != nil {
-		return wf.SelectedDevice.SetPower(on)
-	}
-	for _, device := range wf.Devices {
-		go device.SetPower(on)
-	}
-	return nil
-}
-
-func (wf *WizFleet) SetBrightness(value int) error {
-	if wf.SelectedDevice != nil {
-		return wf.SelectedDevice.SetBrightness(value)
-	}
-	for _, device := range wf.Devices {
-		go device.SetBrightness(value)
+		if _, err := wf.SelectedDevice.SetPower(on); err != nil {
+			return err
+		}
+	} else {
+		for _, device := range wf.Devices {
+			go device.SetPower(on)
+		}
 	}
 	return nil
 }
 
-func (wf *WizFleet) SetTemperature(value int) error {
+func (wf *WizFleet) SetBrightness(value float64) error {
 	if wf.SelectedDevice != nil {
-		return wf.SelectedDevice.SetTemperature(value)
+		if _, err := wf.SelectedDevice.SetBrightness(value); err != nil {
+			return err
+		}
+	} else {
+		for _, device := range wf.Devices {
+			go device.SetBrightness(value)
+		}
 	}
-	for _, device := range wf.Devices {
-		go device.SetTemperature(value)
+	return nil
+}
+
+func (wf *WizFleet) SetTemperature(value float64) error {
+	if wf.SelectedDevice != nil {
+		if _, err := wf.SelectedDevice.SetTemperature(value); err != nil {
+			return err
+		}
+	} else {
+		for _, device := range wf.Devices {
+			go device.SetTemperature(value)
+		}
 	}
 	return nil
 }
 
 func (wf *WizFleet) SetColor(rgb color.Color) error {
 	if wf.SelectedDevice != nil {
-		return wf.SelectedDevice.SetColor(rgb)
-	}
-	for _, device := range wf.Devices {
-		go device.SetColor(rgb)
+		if _, err := wf.SelectedDevice.SetColor(rgb); err != nil {
+			return err
+		}
+	} else {
+		for _, device := range wf.Devices {
+			go device.SetColor(rgb)
+		}
 	}
 	return nil
 }
