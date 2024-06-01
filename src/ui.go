@@ -16,19 +16,16 @@ import (
 func waitForDevices(mainWindow fyne.Window, timeout time.Duration, ch chan *WizDevice) {
 	retry := make(chan bool)
 
-	// Create initial UI components
 	statusLabel := widget.NewLabel("Discovering WiZ devices...")
 	retryButton := widget.NewButton("Retry", func() {
 		retry <- true
 	})
 
-	// Add components to the main window
 	mainWindow.SetContent(container.NewVBox(
 		statusLabel,
 		retryButton,
 	))
 
-	// Show the main window
 	mainWindow.Show()
 
 	// Attempt to discover WiZ devices
@@ -57,20 +54,21 @@ func waitForDevices(mainWindow fyne.Window, timeout time.Duration, ch chan *WizD
 func start(mainWindow fyne.Window, fleet *WizFleet) {
 	fleet.Start()
 
+	// Controls
 	switchButton := widget.NewCheck("Power", func(on bool) {
 		go fleet.SetPower(on)
 	})
 
-	brightnessSlider := widget.NewSlider(0, 100)
+	brightnessSlider := widget.NewSlider(10, 100)
 	brightnessSlider.SetValue(50)
 	brightnessSlider.OnChanged = func(value float64) {
-		go fleet.SetBrightness(int(value))
+		go fleet.SetBrightness(value)
 	}
 
 	temperatureSlider := widget.NewSlider(2200, 6500)
 	temperatureSlider.SetValue(4000)
 	temperatureSlider.OnChanged = func(value float64) {
-		go fleet.SetTemperature(int(value))
+		go fleet.SetTemperature(value)
 	}
 
 	colorPicker := colorpicker.New(200, colorpicker.StyleHue)
@@ -78,18 +76,15 @@ func start(mainWindow fyne.Window, fleet *WizFleet) {
 		go fleet.SetColor(c)
 	})
 
-	// Device selector
 	deviceSelector := widget.NewSelect(nil, func(value string) {
 		device := fleet.Select(value)
-		log.Debugf("Selected device: %v", device)
-		if device == nil {
-			return
-		}
-		if state, err := device.GetState(); err == nil {
-			log.Debugf("State: %v", state)
-			switchButton.SetChecked(state["state"].(bool))
-			brightnessSlider.SetValue(float64(state["dimming"].(float64)))
-			temperatureSlider.SetValue(float64(state["temp"].(float64)))
+		log.Debugf("Selected device: %+v", device)
+		if device != nil {
+			if state, err := device.GetState(); err == nil {
+				switchButton.SetChecked(state.State)
+				brightnessSlider.SetValue(state.Dimming)
+				temperatureSlider.SetValue(state.Temp)
+			}
 		}
 	})
 
@@ -120,13 +115,13 @@ func start(mainWindow fyne.Window, fleet *WizFleet) {
 	mainWindow.CenterOnScreen()
 	mainWindow.Show()
 
+	// Update RSSI every 1 second
 	go func() {
-		// Update RSSI
 		for {
-			if fleet.SelectedDevice != nil && fleet.SelectedDevice.State != nil {
-				rssiLabel.SetText(fmt.Sprintf("RSSI: %d", int(fleet.SelectedDevice.State["rssi"].(float64))))
+			if fleet.SelectedDevice != nil {
+				rssiLabel.SetText(fmt.Sprintf("RSSI: %v", fleet.SelectedDevice.State.Rssi))
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Second)
 		}
 	}()
 }
