@@ -13,7 +13,9 @@ const (
 	discoveryMsg  = `{"method":"registration","params":{"phoneMac":"AAAAAAAAAAAA","phoneIp":"1.2.3.4","register":false,"id":1}}`
 )
 
-func discoverWiZDevices(timeout time.Duration) []*WizDevice {
+func discoverWiZDevices(timeout time.Duration, ch chan *WizDevice) {
+	defer close(ch)
+
 	var devices []*WizDevice
 
 	localAddr := &net.UDPAddr{
@@ -38,8 +40,12 @@ func discoverWiZDevices(timeout time.Duration) []*WizDevice {
 	for {
 		select {
 		case <-timeoutReached:
-			log.Info("Discovery timeout reached")
-			return devices
+			log.Info("Discovery timeout reached.")
+			if len(devices) > 0 {
+				return
+			}
+			log.Infof("Retrying in %.0fs", timeout.Seconds())
+			time.Sleep(timeout)
 		default:
 			log.Debug("Sending discovery packet...")
 			_, err := conn.WriteToUDP([]byte(discoveryMsg), &serverAddr)
@@ -71,9 +77,12 @@ func discoverWiZDevices(timeout time.Duration) []*WizDevice {
 							continue
 						}
 						devices = append(devices, device)
+						ch <- device
 					}
 				}
 			}
+
+			time.Sleep(time.Millisecond * 500)
 		}
 	}
 }

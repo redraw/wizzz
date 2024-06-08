@@ -20,6 +20,9 @@ func NewWizFleet() *WizFleet {
 
 func (wf *WizFleet) AddDevice(device *WizDevice) {
 	wf.Devices = append(wf.Devices, device)
+	if len(wf.Devices) == 1 {
+		wf.SelectedDevice = device
+	}
 }
 
 func (wf *WizFleet) Select(ip string) *WizDevice {

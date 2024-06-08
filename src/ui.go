@@ -13,46 +13,22 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func waitForDevices(mainWindow fyne.Window, timeout time.Duration, ch chan *WizDevice) {
-	retry := make(chan bool)
-
-	statusLabel := widget.NewLabel("Discovering WiZ devices...")
-	retryButton := widget.NewButton("Retry", func() {
-		retry <- true
-	})
+func start(mainWindow fyne.Window, deviceCh chan *WizDevice) {
+	fleet := NewWizFleet()
+	fleet.Start()
 
 	mainWindow.SetContent(container.NewVBox(
-		statusLabel,
-		retryButton,
+		widget.NewLabel("Discovering WiZ devices..."),
 	))
 
 	mainWindow.Show()
 
-	// Attempt to discover WiZ devices
-	devices := discoverWiZDevices(timeout)
-
-	for len(devices) == 0 {
-		statusLabel.SetText("No WiZ devices found.")
-		retryButton.Show()
-
-		// Wait for retry button to be clicked
-		<-retry
-
-		// Retry discovery
-		devices = discoverWiZDevices(timeout)
+	for len(fleet.Devices) == 0 {
+		device := <-deviceCh
+		if device != nil {
+			fleet.AddDevice(device)
+		}
 	}
-
-	// Send discovered devices to the main function
-	for _, device := range devices {
-		ch <- device
-	}
-	close(ch)
-
-	mainWindow.Hide()
-}
-
-func start(mainWindow fyne.Window, fleet *WizFleet) {
-	fleet.Start()
 
 	// Controls
 	switchButton := widget.NewCheck("Power", func(on bool) {
@@ -88,13 +64,32 @@ func start(mainWindow fyne.Window, fleet *WizFleet) {
 		}
 	})
 
-	options := make([]string, 0, len(fleet.Devices))
+	options := make([]string, 0)
 	options = append(options, "All")
-	for _, device := range fleet.Devices {
-		options = append(options, device.IP)
-	}
+	options = append(options, fleet.SelectedDevice.IP)
 	deviceSelector.SetOptions(options)
 	deviceSelector.SetSelectedIndex(1)
+
+	deviceSelector.OnChanged = func(s string) {
+		device := fleet.Select(s)
+		log.Debugf("Selected device: %+v", device)
+		if device != nil {
+			if state, err := device.GetState(); err == nil {
+				switchButton.SetChecked(state.State)
+				brightnessSlider.SetValue(state.Dimming)
+				temperatureSlider.SetValue(state.Temp)
+			}
+		}
+	}
+
+	// Update device list until deviceCh is consumed
+	go func() {
+		for device := range deviceCh {
+			fleet.AddDevice(device)
+			options = append(options, device.IP)
+			deviceSelector.SetOptions(options)
+		}
+	}()
 
 	rssiLabel := widget.NewLabel("RSSI: -")
 
