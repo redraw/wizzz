@@ -57,7 +57,7 @@ func start(mainWindow fyne.Window, deviceCh chan *WizDevice) {
 		log.Debugf("Selected device: %+v", device)
 		if device != nil {
 			if state, err := device.GetState(); err == nil {
-				switchButton.SetChecked(state.State)
+				switchButton.SetChecked(true)
 				brightnessSlider.SetValue(state.Dimming)
 				temperatureSlider.SetValue(state.Temp)
 			}
@@ -69,18 +69,6 @@ func start(mainWindow fyne.Window, deviceCh chan *WizDevice) {
 	options = append(options, fleet.SelectedDevice.IP)
 	deviceSelector.SetOptions(options)
 	deviceSelector.SetSelectedIndex(1)
-
-	deviceSelector.OnChanged = func(s string) {
-		device := fleet.Select(s)
-		log.Debugf("Selected device: %+v", device)
-		if device != nil {
-			if state, err := device.GetState(); err == nil {
-				switchButton.SetChecked(state.State)
-				brightnessSlider.SetValue(state.Dimming)
-				temperatureSlider.SetValue(state.Temp)
-			}
-		}
-	}
 
 	// Update device list until deviceCh is consumed
 	go func() {
